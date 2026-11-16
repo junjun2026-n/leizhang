@@ -1,6 +1,10 @@
-# JUMP SSH 堡垒机
+# leizhang 堡垒机
 
-???**v0.261115** ? ???????? ? [GPLv3 ??](LICENSE) ? [????](COPYRIGHT.md)
+版本：**v0.261115** · 版权归本人所有 · [GPLv3 完整许可](LICENSE) · [版权说明](COPYRIGHT.md)
+
+项目名称与目录：`leizhang`。GitHub 仓库：[junjun2026-n/leizhang](https://github.com/junjun2026-n/leizhang)。
+
+Python 模块名仍为 `jump_ssh`，下方启动命令按该模块名执行。
 
 独立的 Python SSH 堡垒机项目，数据库使用 **PostgreSQL（PG）**。源码、静态资源、部署配置、测试和文档均位于本目录，不依赖 QIONGHAI 或 TaaS 代码。默认端口 `8200`。
 
@@ -99,7 +103,7 @@ $env:TEST_DATABASE_URL='postgresql+psycopg://test_user:SET_LOCALLY_BEFORE_USE@lo
 ## 目录
 
 ```text
-JUMP_SSH/
+leizhang/
   jump_ssh/        配置、安全、ORM、API、SSH 网关、管理 CLI
   templates/      中文工作台页面
   static/         页面脚本、样式和本地 xterm 资源
