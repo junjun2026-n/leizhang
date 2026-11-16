@@ -1,0 +1,15 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+SQLAlchemy>=2.0.38,<3
+psycopg[binary]>=3.2,<4
+asyncssh>=2.21,<3
+argon2-cffi>=23.1,<26
+cryptography>=44,<47
+pyotp>=2.9,<3
+jinja2>=3.1.6,<4
+python-dotenv>=1,<2
+alembic>=1.15,<2
+httpx>=0.28,<1
+pytest>=8.3,<10
+asyncvnc==1.3.0
+Pillow>=11,<13

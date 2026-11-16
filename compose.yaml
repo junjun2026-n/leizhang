@@ -1,0 +1,78 @@
+services:
+  guacd:
+    image: guacamole/guacd:1.6.0
+    restart: unless-stopped
+    networks: [internal, outbound]
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jump_ssh
+      POSTGRES_USER: jump_ssh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run init-config first}
+      JUMP_RUNTIME_PASSWORD: ${JUMP_RUNTIME_PASSWORD:?Run init-config first}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/init-runtime.sh:/docker-entrypoint-initdb.d/10-runtime.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U jump_ssh -d jump_ssh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+  migrate:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://jump_ssh:SET_LOCALLY_BEFORE_USE@database:5432/jump_ssh
+      MASTER_KEY: ${MASTER_KEY:?Run init-config first}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    command: [python, -m, jump_ssh.cli, migrate]
+    depends_on:
+      database:
+        condition: service_healthy
+    networks: [internal]
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://jump_runtime:SET_LOCALLY_BEFORE_USE@database:5432/jump_ssh
+      MASTER_KEY: ${MASTER_KEY:?Run init-config first}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      SESSION_MINUTES: ${SESSION_MINUTES:-480}
+      SSH_SESSION_SECONDS: ${SSH_SESSION_SECONDS:-3600}
+      SSH_IDLE_SECONDS: ${SSH_IDLE_SECONDS:-900}
+      MAX_RECORDING_BYTES: ${MAX_RECORDING_BYTES:-20971520}
+      GUACD_HOST: guacd
+      GUACD_PORT: 4822
+      SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
+      SSH_PROXY_KEY: /app/ssh-host-key/host-key
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8200:8200"
+      - "0.0.0.0:2222:2222"
+    volumes:
+      - ssh_host_key:/app/ssh-host-key
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [internal, outbound]
+    healthcheck:
+      test: [CMD, python, -c, "import os,urllib.request; from urllib.parse import urlsplit; r=urllib.request.Request('http://127.0.0.1:8200/health/ready',headers={'Host':urlsplit(os.environ['PUBLIC_ORIGIN']).netloc}); urllib.request.urlopen(r,timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+volumes:
+  postgres_data:
+  ssh_host_key:
+networks:
+  internal:
+    internal: true
+  outbound:
