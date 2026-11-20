@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：platform_config.py
+# 生成日期：2026-10-20
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：实现 platform_config 模块相关功能。
+#           文件用途：供堡垒机的 leizhang/jump_ssh/platform_config.py 模块使用。
+#           注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+# ============================================================
 """Administrator settings and public branding. Never expose connection secrets."""
 import base64
 import os
@@ -15,7 +26,7 @@ from sqlalchemy.engine import URL, make_url
 from .api import admin, audit
 from .config import ROOT
 from .permissions import require
-from .db import transaction
+from .db import transaction, advisory_lock, storage_engine
 from .models import PlatformSetting
 from .local import secure
 
@@ -67,7 +78,7 @@ def public_platform(request: Request):
 def save_appearance(body: Appearance, request: Request, user=Depends(require('settings.appearance'))):
     with transaction(request.app.state.factory) as db:
         # Serialize concurrent administrator edits, including the first insert.
-        db.execute(text("SELECT pg_advisory_xact_lock(hashtext('platform-appearance'))"))
+        advisory_lock(db, 'platform-appearance')
         row = db.get(PlatformSetting, 'appearance')
         if not row:
             row = PlatformSetting(key='appearance')
@@ -88,8 +99,10 @@ def pending_url(request):
 
 def database_info(value):
     url = make_url(value)
-    return dict(host=url.host or '', port=url.port or 5432, database=url.database or '',
+    kind = 'mysql' if url.get_backend_name() in ('mysql', 'mariadb') else 'postgresql'
+    return dict(database_type=kind, host=url.host or '', port=url.port or (3306 if kind == 'mysql' else 5432), database=url.database or '',
                 username=url.username or '', sslmode=url.query.get('sslmode', 'prefer'),
+                mysql_ssl='require' if url.query.get('ssl_verify_cert') == 'true' else 'disable',
                 password='', password_configured=bool(url.password))
 
 
@@ -102,38 +115,52 @@ def read_database(request: Request, user=Depends(require('settings.database'))):
 
 
 class DatabaseInput(BaseModel):
+    database_type: Literal['postgresql', 'mysql'] = 'postgresql'
     host: str = Field(min_length=1, max_length=253, pattern=r'^[a-zA-Z0-9_.:\-]+$')
     port: int = Field(default=5432, ge=1, le=65535)
     database: str = Field(min_length=1, max_length=63)
     username: str = Field(min_length=1, max_length=63)
     password: str = Field(default='', max_length=1024)
     sslmode: Literal['disable', 'prefer', 'require', 'verify-ca', 'verify-full'] = 'prefer'
+    mysql_ssl: Literal['disable', 'require'] = 'disable'
 
 
 def build_url(body, request):
     previous = make_url(pending_url(request))
+    previous_type = 'mysql' if previous.get_backend_name() in ('mysql', 'mariadb') else 'postgresql'
     password = body.password or previous.password
-    if not body.password and (body.host, body.port, body.username) != (previous.host, previous.port or 5432, previous.username):
+    if not body.password and (body.database_type, body.host, body.port, body.username) != (previous_type, previous.host, previous.port or (3306 if previous_type == 'mysql' else 5432), previous.username):
         raise HTTPException(400, '更换数据库主机、端口或用户时请重新填写密码')
-    same_database = (body.host, body.port, body.username, body.database) == (previous.host, previous.port or 5432, previous.username, previous.database)
+    same_database = (body.database_type, body.host, body.port, body.username, body.database) == (previous_type, previous.host, previous.port or (3306 if previous_type == 'mysql' else 5432), previous.username, previous.database)
     query = dict(previous.query) if same_database else {}
-    query['sslmode'] = body.sslmode
-    return URL.create('postgresql+psycopg', username=body.username, password=password,
+    if body.database_type == 'mysql':
+        query.pop('sslmode', None)
+        query['charset'] = 'utf8mb4'
+        query.pop('ssl', None)
+        query.pop('ssl_verify_cert', None)
+        query.pop('ssl_verify_identity', None)
+        if body.mysql_ssl == 'require':
+            query['ssl_verify_cert'] = 'true'
+            query['ssl_verify_identity'] = 'true'
+    else:
+        query['sslmode'] = body.sslmode
+    return URL.create('mysql+pymysql' if body.database_type == 'mysql' else 'postgresql+psycopg', username=body.username, password=password,
                       host=body.host, port=body.port, database=body.database,
                       query=query)
 
 
 def check_database(url):
-    engine = create_engine(url, connect_args={'connect_timeout':5}, pool_pre_ping=True)
+    engine = storage_engine(url, pool_pre_ping=True)
     try:
         with engine.connect() as conn:
-            version = conn.scalar(text('SHOW server_version'))
-            tables = conn.execute(text("SELECT to_regclass('users'), to_regclass('platform_settings'), to_regclass('ssh_sessions'), to_regclass('system_accounts'), to_regclass('account_grants')")).one()
-            ready = all(tables)
+            from sqlalchemy import inspect
+            version = conn.scalar(text('SELECT VERSION()'))
+            ready = {'users','roles','platform_settings','ssh_sessions','system_accounts','account_grants'}.issubset(inspect(conn).get_table_names())
             if ready:
                 conn.execute(text('SELECT id FROM users LIMIT 1'))
-                conn.execute(text('SELECT key FROM platform_settings LIMIT 1'))
-        return dict(connected=True, version=version, schema_ready=ready)
+                from sqlalchemy import select
+                conn.execute(select(PlatformSetting.key).limit(1))
+        return dict(connected=True, version=version, schema_ready=ready, database_type=engine.dialect.name)
     except Exception:
         raise HTTPException(400, '数据库连接或权限检查失败，请检查地址、端口、账号、密码和 SSL 配置') from None
     finally:
@@ -153,7 +180,7 @@ def initialize_database(body: DatabaseInput, request: Request, user=Depends(requ
     from .db import database
     from sqlalchemy import inspect, select
     url = build_url(body, request)
-    engine = create_engine(url, connect_args={'connect_timeout':5})
+    engine = storage_engine(url)
     with initialization_lock:
         try:
             with engine.connect() as connection:
@@ -170,7 +197,7 @@ def initialize_database(body: DatabaseInput, request: Request, user=Depends(requ
             target_engine,factory=database(url)
             try:
                 with transaction(factory) as db:
-                    db.execute(text('SELECT pg_advisory_xact_lock(820001)'))
+                    advisory_lock(db, 'database-initialize')
                     if not db.scalar(select(User.id).limit(1)):
                         db.add(User(username=user.username,password_hash=user.password_hash,role='admin',role_id='admin'))
             finally:

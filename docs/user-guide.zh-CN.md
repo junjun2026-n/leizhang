@@ -461,10 +461,10 @@ LOGO 支持 PNG、JPEG、WebP，上传源文件最多 5 MB，页面自动缩小�
 
 ## 启动维护与备份
 
-以下操作由部署人员执行，命令工作目录为 `JUMP_SSH`。已安装依赖和配置数据库后，Windows 常规启动方式：
+以下操作由部署人员执行，命令工作目录为 `leizhang`。已安装依赖和配置数据库后，Windows 常规启动方式：
 
 ```powershell
-cd C:\20260501\qionghai\JUMP_SSH
+cd C:\20260501\qionghai\leizhang
 .\start.ps1
 ```
 
@@ -473,7 +473,7 @@ cd C:\20260501\qionghai\JUMP_SSH
 Linux 启动方式：
 
 ```sh
-cd /path/to/JUMP_SSH
+cd /path/to/leizhang
 sh start.sh
 ```
 

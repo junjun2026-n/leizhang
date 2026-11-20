@@ -6,7 +6,7 @@
 
 Python 模块名仍为 `jump_ssh`，下方启动命令按该模块名执行。
 
-独立的 Python SSH 堡垒机项目，数据库使用 **PostgreSQL（PG）**。源码、静态资源、部署配置、测试和文档均位于本目录，不依赖 QIONGHAI 或 TaaS 代码。默认端口 `8200`。
+独立的 Python SSH 堡垒机项目，平台数据库支持 **PostgreSQL（PQ）和 MySQL / MariaDB**。源码、静态资源、部署配置、测试和文档均位于本目录，不依赖 QIONGHAI 或 TaaS 代码。默认端口 `8200`。数据库连接与初始化见[数据库配置说明](docs/database-configuration.zh-CN.md)。
 
 详细操作步骤见[堡垒机使用手册](docs/user-guide.zh-CN.md)，包括登录与 MFA、用户和角色、资源账号授权、审批消息、多协议连接、命令黑／白名单、录像审计、系统配置及常见问题。
 

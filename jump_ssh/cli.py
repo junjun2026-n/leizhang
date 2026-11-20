@@ -1,6 +1,18 @@
+# ============================================================
+# 文件名称：cli.py
+# 生成日期：2026-10-20
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：实现 cli 模块相关功能。
+#           文件用途：供堡垒机的 leizhang/jump_ssh/cli.py 模块使用。
+#           注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+# ============================================================
 import argparse
 import getpass
 import secrets
+import os
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -12,6 +24,7 @@ def main():
     init = sub.add_parser('init-config')
     init.add_argument('--origin', default='http://127.0.0.1:8200')
     init.add_argument('--database-host', default='127.0.0.1')
+    init.add_argument('--database-type', choices=['postgresql', 'mysql'], default='postgresql')
     admin = sub.add_parser('create-admin')
     admin.add_argument('username')
     reset = sub.add_parser('reset-mfa')
@@ -23,7 +36,8 @@ def main():
         target = root/'.env'
         if target.exists(): parser.error('.env 已存在，拒绝覆盖密钥')
         password = secrets.token_urlsafe(32)
-        config = (f'DATABASE_URL=postgresql+psycopg://jump_ssh:SET_LOCALLY_BEFORE_USE@{args.database_host}:5432/jump_ssh\n'
+        driver, port = ('mysql+pymysql', 3306) if args.database_type == 'mysql' else ('postgresql+psycopg', 5432)
+        config = (f'DATABASE_URL={driver}://jump_ssh:{password}@{args.database_host}:{port}/jump_ssh\n'
                   f'POSTGRES_PASSWORD={password}\nJUMP_RUNTIME_PASSWORD={secrets.token_urlsafe(32)}\nMASTER_KEY={Fernet.generate_key().decode()}\n'
                   f'PUBLIC_ORIGIN={args.origin}\nCOOKIE_SECURE={str(args.origin.startswith("https://")).lower()}\n'
                   'SESSION_MINUTES=480\nSSH_SESSION_SECONDS=3600\nSSH_IDLE_SECONDS=900\nMAX_RECORDING_BYTES=20971520\n')
@@ -33,6 +47,16 @@ def main():
         print('已生成 .env。请限制文件读取权限，并独立备份 MASTER_KEY。未创建数据库。')
         return
     if args.command == 'migrate':
+        from .config import Settings
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.engine import make_url
+        settings = Settings()
+        migration_url = os.environ.get('MIGRATION_DATABASE_URL') or settings.database_url
+        if make_url(migration_url).get_backend_name() in ('mysql', 'mariadb'):
+            from .mysql_schema import initialize
+            initialize(migration_url)
+            print('MySQL 数据库结构初始化完成')
+            return
         from alembic import command
         from alembic.config import Config
         config = Config(str(root/'alembic.ini'))

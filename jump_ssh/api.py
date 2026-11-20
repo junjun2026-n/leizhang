@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：api.py
+# 生成日期：2026-10-20
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：实现 api 模块相关功能。
+#           文件用途：供堡垒机的 leizhang/jump_ssh/api.py 模块使用。
+#           注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+# ============================================================
 import asyncio
 import json
 import secrets
@@ -11,7 +22,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func, select
 
 from .permissions import require, allows, check, load_permissions, role_permissions, ensure_delegable, protect_target
-from .db import transaction
+from .db import transaction, advisory_lock
 from .models import Asset, Approval, Audit, Grant, AccountGrant, SystemAccount, LoginSession, Recording, SSHSession, User, Role, now
 from .resource_accounts import resolve_account, account_grant, accessible_accounts, accessible_asset_filter, all_grants, approval_account_filter
 from .security import digest, password_hash, totp_step, verify_password
@@ -68,10 +79,10 @@ def login(body: LoginInput, request: Request, response: Response):
     failed = False
     with transaction(request.app.state.factory) as db:
         # Lock per username to serialize password checks and prevent parallel TOTP reuse.
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('login:' + body.username))))
+        advisory_lock(db, 'login:' + body.username)
         ip = request.client.host if request.client else ''
         window = now() - timedelta(minutes=15)
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('login-ip:' + ip))))
+        advisory_lock(db, 'login-ip:' + ip)
         failures = db.scalar(select(func.count()).select_from(Audit).where(
             Audit.action == 'login_failed', Audit.created_at > window,
             Audit.target == body.username))
@@ -152,7 +163,7 @@ class AdminPasswordInput(BaseModel):
 def reset_user_password(user_id: str, body: AdminPasswordInput, request: Request, user=Depends(admin)):
     check(user, 'users.manage')
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('role-edit'))))
+        advisory_lock(db, 'role-edit')
         target=db.get(User,user_id,with_for_update=True)
         if not target:raise HTTPException(404,'用户不存在')
         if target.id==user.id or target.role=='admin':
@@ -181,7 +192,7 @@ def users(request: Request, user=Depends(require('users.view'))):
 @router.post('/users', status_code=201)
 def create_user(body: UserInput, request: Request, user=Depends(require('users.manage'))):
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('role-edit'))))
+        advisory_lock(db, 'role-edit')
         if db.scalar(select(User.id).where(User.username == body.username)): raise HTTPException(409, '用户名已存在')
         role = db.get(Role, body.role_id or body.role)
         if not role: raise HTTPException(400, '角色不存在')
@@ -258,7 +269,7 @@ class UserUpdate(BaseModel):
 def update_user(user_id: str, body: UserUpdate, request: Request, user=Depends(require('users.manage'))):
     if user_id == user.id: raise HTTPException(400, '不可修改自己的角色或启停状态')
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('role-edit'))))
+        advisory_lock(db, 'role-edit')
         target = db.get(User, user_id, with_for_update=True)
         if not target: raise HTTPException(404, '用户不存在')
         protect_target(db, user, target)
@@ -666,7 +677,7 @@ class ConnectInput(BaseModel):
 @router.post('/sessions', status_code=201)
 def create_session(body: ConnectInput, request: Request, user=Depends(require('sessions.connect'))):
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('session:' + user.id))))
+        advisory_lock(db, 'session:' + user.id)
         asset = db.get(Asset, body.asset_id)
         if not asset:
             raise HTTPException(404, '资源不存在')

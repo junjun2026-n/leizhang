@@ -1,3 +1,14 @@
+// ============================================================
+// 文件名称：app.js
+// 生成日期：2026-10-20
+// 修改日期：2026-11-20
+// 版本信息：v0.261115
+// 作    者：JUN
+// 备    注：本程序由AI辅助完成。
+//           文件功能：组织应用界面或应用服务逻辑。
+//           文件用途：供堡垒机的 leizhang/static/app.js 模块使用。
+//           注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+// ============================================================
 'use strict';
 let me=null, current='overview', socket=null, terminal=null, replayTimers=[],connectionGeneration=0;
 const $=id=>document.getElementById(id);
@@ -373,16 +384,19 @@ pages.settings=async root=>{
  if(hasPermission('settings.appearance'))root.append(appearance);
  if(hasPermission('settings.logging')){const logging=card('');root.append(logging);await renderLogForwarding(logging,api,'/settings/logging');}
  if(!hasPermission('settings.database'))return;
- const db=await api('/settings/database'),database=card('PostgreSQL 数据库');database.classList.add('database-settings');
- database.append(node('p','当前连接：'+db.active.host+':'+db.active.port+' / '+db.active.database+'（用户：'+db.active.username+'）','muted'));
+ const db=await api('/settings/database'),database=card('数据库配置');database.classList.add('database-settings');
+ database.append(node('p','当前连接：'+db.active.database_type.toUpperCase()+' '+db.active.host+':'+db.active.port+' / '+db.active.database+'（用户：'+db.active.username+'）','muted'));
  const state=node('p',db.restart_required?'存在待生效配置，请重启服务后检查连接。':'当前配置已生效。','muted');database.append(state);
  database.append(node('p','密码留空保留已配置密码。可先测试连接；更换数据库前需迁移原库数据及加密主密钥，保存后重启服务生效。','muted'));
  const configured=db.configured;
- const dbInputs=form(database,[['host','数据库地址','text',configured.host],['port','端口','number',configured.port],['database','数据库名称','text',configured.database],['username','数据库用户','text',configured.username],['password','数据库密码（留空保留）','password'],['sslmode','SSL 模式','select',configured.sslmode,[['disable','禁用'],['prefer','优先使用'],['require','必须使用'],['verify-ca','校验 CA'],['verify-full','完整校验']]]],async data=>{
+ const dbInputs=form(database,[['database_type','数据库类型','select',configured.database_type,[['postgresql','PostgreSQL（PQ）'],['mysql','MySQL / MariaDB']]],['host','数据库地址','text',configured.host],['port','端口','number',configured.port],['database','数据库名称','text',configured.database],['username','数据库用户','text',configured.username],['password','数据库密码（留空保留）','password'],['sslmode','PostgreSQL SSL 模式','select',configured.sslmode,[['disable','禁用'],['prefer','优先使用'],['require','必须使用'],['verify-ca','校验 CA'],['verify-full','完整校验']]],['mysql_ssl','MySQL TLS','select',configured.mysql_ssl,[['disable','禁用'],['require','必须使用']]]],async data=>{
   const result=await api('/settings/database','PUT',data);dbInputs.password.value='';state.textContent=result.message;notify(result.message);
  },'保存数据库配置');
  const dbData=()=>Object.fromEntries(Object.entries(dbInputs).map(([key,input])=>[key,input.type==='number'?Number(input.value):input.value]));
- const testButton=button('测试连接',async()=>{const result=await api('/settings/database/test','POST',dbData());state.textContent='连接成功，PostgreSQL '+result.version+(result.schema_ready?'，平台数据表已就绪。':'，目标库尚无完整平台数据表，请先迁移原库数据并升级。');notify(state.textContent);},'secondary');
+ const mysqlHelp=node('p','MySQL 8.0+ / MariaDB 10.6+：默认端口 3306，字符集 utf8mb4，使用 InnoDB。请先创建独立数据库及用户，初始化账号需有建表和触发器权限；TLS 启用时校验证书和主机名。','muted');database.append(mysqlHelp);
+ const refreshDatabaseFields=()=>{const mysql=dbInputs.database_type.value==='mysql';dbInputs.sslmode.closest('label').hidden=mysql;dbInputs.sslmode.disabled=mysql;dbInputs.mysql_ssl.closest('label').hidden=!mysql;dbInputs.mysql_ssl.disabled=!mysql;mysqlHelp.hidden=!mysql;};
+ dbInputs.database_type.onchange=()=>{dbInputs.port.value=dbInputs.database_type.value==='mysql'?3306:5432;dbInputs.password.value='';refreshDatabaseFields();};refreshDatabaseFields();
+ const testButton=button('测试连接',async()=>{const result=await api('/settings/database/test','POST',dbData());state.textContent='连接成功，'+(result.database_type==='mysql'?'MySQL / MariaDB':'PostgreSQL')+' '+result.version+(result.schema_ready?'，平台数据表已就绪。':'，目标库尚无完整平台数据表，请先初始化。');notify(state.textContent);},'secondary');
  const initializeButton=button('初始化数据库',async()=>{if(!confirm('初始化表单中的目标数据库？不切换连接，不迁移历史数据。空库创建当前操作用户的管理员账号；已有数据保留。'))return;initializeButton.disabled=true;try{const result=await api('/settings/database/initialize','POST',dbData());state.textContent=result.message;notify(result.message);}finally{initializeButton.disabled=false;}},'secondary');
  database.querySelector('form .actions').prepend(testButton,initializeButton);root.append(database);
 };

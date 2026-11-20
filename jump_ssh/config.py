@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：config.py
+# 生成日期：2026-10-20
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：定义并加载应用配置。
+#           文件用途：供堡垒机的 leizhang/jump_ssh/config.py 模块使用。
+#           注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+# ============================================================
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -34,8 +45,9 @@ class Settings:
         self.ssh_proxy_key = Path(os.environ.get('SSH_PROXY_KEY', str(ROOT/'runtime'/'ssh-proxy-key')))
         if not 0 <= self.ssh_proxy_port <= 65535:
             raise ValueError('SSH_PROXY_PORT 必须为 0–65535；0 表示关闭')
-        if not self.database_url.startswith('postgresql+psycopg://'):
-            raise ValueError('DATABASE_URL 必须使用独立 PostgreSQL 数据库（postgresql+psycopg://）')
+        if not (self.database_url.startswith('postgresql+psycopg://') or
+                self.database_url.startswith(('mysql+pymysql://', 'mariadb+pymysql://'))):
+            raise ValueError('DATABASE_URL 必须使用 PostgreSQL（postgresql+psycopg://）或 MySQL/MariaDB（mysql+pymysql://）')
         Fernet(self.master_key.encode())
         parsed = urlsplit(self.origin)
         if parsed.scheme not in ('http', 'https') or not parsed.netloc or parsed.path:

@@ -1,3 +1,14 @@
+// ============================================================
+// 文件名称：protocols.js
+// 生成日期：2026-10-22
+// 修改日期：2026-11-20
+// 版本信息：v0.261115
+// 作    者：JUN
+// 备    注：本程序由AI辅助完成。
+//           文件功能：实现 protocols 模块相关功能。
+//           文件用途：供堡垒机的 leizhang/static/protocols.js 模块使用。
+//           注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+// ============================================================
 'use strict';
 const protocolNames={ssh:'SSH',telnet:'TELNET',rdp:'RDP',vnc:'VNC',http:'HTTP / HTTPS',postgresql:'PostgreSQL',mysql:'MySQL / MariaDB'};
 const protocolPorts={ssh:22,telnet:23,rdp:3389,vnc:5900,http:80,postgresql:5432,mysql:3306};

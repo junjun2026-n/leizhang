@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：test_api.py
+# 生成日期：2026-10-20
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：验证 api 相关功能。
+#           文件用途：用于开发验证及功能回归。
+#           注意事项：使用隔离测试环境，避免操作正式业务数据。
+# ============================================================
 import secrets
 from datetime import timedelta
 
@@ -138,7 +149,11 @@ def test_audit_rows_cannot_be_changed_or_deleted(app):
     from sqlalchemy.exc import DBAPIError
     with app.state.engine.begin() as conn:
         conn.execute(text("INSERT INTO audit_logs(action,target,ip,created_at) VALUES('test','target','local',now())"))
-    for statement in ("UPDATE audit_logs SET target='changed'", 'DELETE FROM audit_logs', 'TRUNCATE audit_logs'):
+    statements = ["UPDATE audit_logs SET target='changed'", 'DELETE FROM audit_logs']
+    # MySQL has no TRUNCATE triggers; production runtime accounts must lack DROP.
+    if app.state.engine.dialect.name == 'postgresql':
+        statements.append('TRUNCATE audit_logs')
+    for statement in statements:
         with pytest.raises(DBAPIError):
             with app.state.engine.begin() as conn: conn.execute(text(statement))
 

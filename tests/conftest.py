@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：conftest.py
+# 生成日期：2026-10-20
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：验证 conftest 相关功能。
+#           文件用途：用于开发验证及功能回归。
+#           注意事项：使用隔离测试环境，避免操作正式业务数据。
+# ============================================================
 import os
 import uuid
 
@@ -18,11 +29,12 @@ from jump_ssh.security import password_hash
 @pytest.fixture
 def app(monkeypatch):
     url = os.environ.get('TEST_DATABASE_URL')
-    if not url: pytest.skip('Set TEST_DATABASE_URL to an isolated PostgreSQL test database')
+    if not url: pytest.skip('Set TEST_DATABASE_URL to an isolated test database')
     schema = 'jump_test_' + uuid.uuid4().hex
     control = create_engine(url)
-    with control.begin() as conn: conn.execute(text(f'CREATE SCHEMA {schema}'))
-    test_url = make_url(url).update_query_dict({'options':'-csearch_path=' + schema})
+    mysql = make_url(url).get_backend_name() in ('mysql', 'mariadb')
+    with control.begin() as conn: conn.execute(text(f'CREATE DATABASE {schema} CHARACTER SET utf8mb4' if mysql else f'CREATE SCHEMA {schema}'))
+    test_url = make_url(url).set(database=schema) if mysql else make_url(url).update_query_dict({'options':'-csearch_path=' + schema})
     monkeypatch.setenv('DATABASE_URL', test_url.render_as_string(hide_password=False))
     monkeypatch.setenv('MASTER_KEY', Fernet.generate_key().decode())
     monkeypatch.setenv('PUBLIC_ORIGIN', 'http://testserver')
@@ -34,13 +46,17 @@ def app(monkeypatch):
     from alembic.config import Config
     from pathlib import Path
     monkeypatch.delenv('MIGRATION_DATABASE_URL', raising=False)
-    command.upgrade(Config(str(Path(__file__).resolve().parents[1]/'alembic.ini')), 'head')
+    if mysql:
+        from jump_ssh.mysql_schema import initialize
+        initialize(test_url)
+    else:
+        command.upgrade(Config(str(Path(__file__).resolve().parents[1]/'alembic.ini')), 'head')
     try:
         yield app
     finally:
         app.state.engine.dispose()
         # schema is generated here, never supplied by the operator.
-        with control.begin() as conn: conn.execute(text(f'DROP SCHEMA {schema} CASCADE'))
+        with control.begin() as conn: conn.execute(text(f'DROP DATABASE {schema}' if mysql else f'DROP SCHEMA {schema} CASCADE'))
         control.dispose()
 
 

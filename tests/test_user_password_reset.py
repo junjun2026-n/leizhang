@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：test_user_password_reset.py
+# 生成日期：2026-11-11
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：验证 user_password_reset 相关功能。
+#           文件用途：用于开发验证及功能回归。
+#           注意事项：使用隔离测试环境，避免操作正式业务数据。
+# ============================================================
 from conftest import add_user,login
 from jump_ssh.db import transaction
 from jump_ssh.models import User,LoginSession,Audit

@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：role_api.py
+# 生成日期：2026-10-23
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：实现 role_api 模块相关功能。
+#           文件用途：供堡垒机的 leizhang/jump_ssh/role_api.py 模块使用。
+#           注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+# ============================================================
 import json
 from typing import Literal
 
@@ -8,7 +19,7 @@ from sqlalchemy import func, select, or_
 from .api import admin, audit
 from .command_policy import CommandPolicyInput
 from .permissions import require, role_permissions, ensure_delegable, protect_target
-from .db import transaction
+from .db import transaction, advisory_lock
 from .models import LoginSession, Role, SSHSession, User
 from .permissions import CATALOG, REQUIRES, defaults, normalize
 
@@ -55,7 +66,7 @@ def roles(request: Request, user=Depends(require('roles.view'))):
 def create_role(body: RoleInput, request: Request, user=Depends(require('roles.manage'))):
     ensure_delegable(user, defaults(body.base_role))
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('role-edit'))))
+        advisory_lock(db, 'role-edit')
         if db.scalar(select(Role.id).where(Role.name == body.name)):
             raise HTTPException(409, '角色名称已存在')
         target = Role(**body.model_dump(exclude={'command_rules'}),
@@ -69,7 +80,7 @@ def create_role(body: RoleInput, request: Request, user=Depends(require('roles.m
 @router.put('/roles/{role_id}')
 def edit_role(role_id: str, body: RoleInput, request: Request, user=Depends(require('roles.manage'))):
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('role-edit'))))
+        advisory_lock(db, 'role-edit')
         target = db.get(Role, role_id, with_for_update=True)
         if not target:
             raise HTTPException(404, '角色不存在')
@@ -99,7 +110,7 @@ def edit_role(role_id: str, body: RoleInput, request: Request, user=Depends(requ
 @router.delete('/roles/{role_id}')
 def delete_role(role_id: str, request: Request, user=Depends(require('roles.manage'))):
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('role-edit'))))
+        advisory_lock(db, 'role-edit')
         target = db.get(Role, role_id, with_for_update=True)
         if not target:
             raise HTTPException(404, '角色不存在')
@@ -143,7 +154,7 @@ def assign_permissions(role_id: str, body: PermissionsInput, request: Request, u
     codes = normalize(body.permissions)
     ensure_delegable(user, codes)
     with transaction(request.app.state.factory) as db:
-        db.execute(select(func.pg_advisory_xact_lock(func.hashtext('role-edit'))))
+        advisory_lock(db, 'role-edit')
         role = db.get(Role, role_id, with_for_update=True)
         if not role:
             raise HTTPException(404, '角色不存在')

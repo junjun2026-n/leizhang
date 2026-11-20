@@ -1,3 +1,14 @@
+# ============================================================
+# 文件名称：test_platform_config.py
+# 生成日期：2026-10-20
+# 修改日期：2026-11-20
+# 版本信息：v0.261115
+# 作    者：JUN
+# 备    注：本程序由AI辅助完成。
+#           文件功能：验证 platform_config 相关功能。
+#           文件用途：用于开发验证及功能回归。
+#           注意事项：使用隔离测试环境，避免操作正式业务数据。
+# ============================================================
 from unittest.mock import patch
 
 from dotenv import dotenv_values
@@ -86,3 +97,24 @@ def test_initialization_keeps_current_users_and_settings(client,app,tmp_path):
         result=client.post('/api/settings/database/initialize',json=payload)
         assert result.status_code==200,result.text
     assert config.read_text()==before
+
+
+def test_mysql_configuration_preserves_backend_and_password(client, app, tmp_path):
+    admin_login(client, app)
+    config = tmp_path / '.env'
+    config.write_text("DATABASE_URL='mysql+pymysql://storage:SET_LOCALLY_BEFORE_USE@127.0.0.1:3306/platform?charset=utf8mb4'\n", encoding='utf-8')
+    app.state.config_path = config
+    response = client.get('/api/settings/database')
+    assert 'private-mysql-secret' not in response.text
+    payload = response.json()['configured']
+    assert payload['database_type'] == 'mysql'
+    assert payload['port'] == 3306
+    payload.pop('password_configured')
+    with patch('jump_ssh.platform_config.check_database', return_value={'connected': True, 'schema_ready': True}) as check:
+        assert client.put('/api/settings/database', json=payload).status_code == 200
+        url = check.call_args.args[0]
+        assert url.drivername == 'mysql+pymysql'
+        assert url.password == 'private-mysql-secret'
+        assert 'sslmode' not in url.query
+    payload['database_type'] = 'postgresql'
+    assert client.post('/api/settings/database/test', json=payload).status_code == 400

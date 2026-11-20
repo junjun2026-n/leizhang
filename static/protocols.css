@@ -1,3 +1,16 @@
+/*
+============================================================
+文件名称：protocols.css
+生成日期：2026-10-22
+修改日期：2026-11-20
+版本信息：v0.261115
+作    者：JUN
+备    注：本程序由AI辅助完成。
+          文件功能：定义 protocols 界面样式和布局。
+          文件用途：供堡垒机的 leizhang/static/protocols.css 模块使用。
+          注意事项：运行前检查依赖与配置；涉及数据或服务变更时先备份并验证。
+============================================================
+*/
 .sql-editor{width:100%;min-height:180px;font-family:Consolas,monospace}.audit-detail{white-space:pre-wrap;max-width:460px;max-height:240px;overflow:auto;margin:0}.remote-display{width:100%;min-height:200px;overflow:auto;background:#161b22;outline:none}.remote-browser{width:100%;display:block;min-height:120px;background:#161b22;outline:2px solid transparent}.remote-browser:focus,.remote-display:focus{outline:2px solid var(--primary)}
 .tls-option{flex-direction:row;align-items:center;gap:8px;white-space:nowrap}.tls-option input[type=checkbox]{align-self:center;margin:0;flex-shrink:0}
 .protocol-audit-filters{display:flex;align-items:flex-end;gap:12px;max-width:650px;margin-bottom:15px}.protocol-audit-filters>label{flex:1;min-width:0;margin:0}.protocol-audit-filters>.actions{flex:none;margin:0;padding:0;overflow:visible}.protocol-audit-filters button{white-space:nowrap}
